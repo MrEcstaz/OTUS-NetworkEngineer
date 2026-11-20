@@ -19,7 +19,7 @@
 
 - Зона 0 логически разорвана: R14 и R15 не соединены напрямую, все их порты заняты, физический линк добавить нельзя. В зоне 0 лежат только Loopback0 у R14 (10.0.0.14/32) и R15 (10.0.0.15/32), adjacency между ABR нет. Что из этого выходит для маршрутизации, показал стенд, всё описано по факту в разделе 6.
 - Virtual link я не использовал: тема вне программы занятия, и через stub-зону virtual link в принципе невозможен ([RFC 2328, раздел 3.6](https://www.rfc-editor.org/rfc/rfc2328#section-3.6)).
-- IPv6 я не настраивал: пункт 5 задания не реализован, вся логика зон на IPv4. Это осознанное решение, помечаю его здесь и в разделе 9.
+- IPv6: вся логика зон повторена на OSPFv3 (процесс 6, те же типы зон, range, фильтр). Конфиги, два бага, найденные по дороге, и проверки: раздел 10.
 - Зона 10: stub. ABR (R14, R15) автоматически вставляют в stub-зону default 0.0.0.0/0, так что пункт 2 (маршрут по умолчанию для R12 и R13) закрывается без отдельной команды.
 - Зона 101: totally stubby: `area 101 stub no-summary` на ABR R14, `area 101 stub` на R19. R19 получает только default, type 3 LSA в зону не проходят.
 - Зона 102: обычная. Чтобы выполнить пункт 4, на ABR R15 стоит фильтр `area 102 filter-list prefix NO-AREA101 in`, который не выпускает в зону 102 сети зоны 101: 10.0.0.19/32 (loopback R19) и 10.0.1.8/30 (линк R14 R19).
@@ -464,7 +464,7 @@ VPCS> ping 10.0.0.20
 - Фильтр NO-AREA101 на стенде формальный: R15 в зону 102 сети зоны 101 не анонсировал и до фильтра, deny-строки не срабатывали. Оставил в конфиге как страховку, эффект продемонстрировать не на что.
 - У этого образа IOL нет счётчиков matches в выводе `show ip prefix-list` и сама команда `show prefix-list NO-AREA101` не существует (Invalid input), работает только вариант с `ip`: `show ip prefix-list`.
 - В running-config IOL команда `log-adjacency-changes` в секции `router ospf 1` не отображается (на этом образе), хотя вводилась. События adjacency я видел в логах консоли.
-- IPv6 не настраивался: пункт 5 задания не реализован, вся логика зон на IPv4 (раздел 1).
+- В выводе `show ipv6 ospf database` на этом IOL оператор `| section` показывает только заголовки секций, содержимое LSA по секциям не читается; сверку я делал через `| include`. Счётчиков matches в `show ipv6 prefix-list` тоже нет, как и в IPv4-варианте.
 - Virtual link не использовался: вне программы занятия, и через stub-зону невозможен (RFC 2328, раздел 3.6).
 - `area 10 range` создал на ABR локальный маршрут с next hop Null0, в планировании я этого не закладывал: зафиксировал как есть (раздел 4.4).
 
@@ -488,7 +488,19 @@ no ip ospf 1 area 10
 no ip prefix-list NO-AREA101
 ```
 
-После отката `show ip route` на всех роутерах возвращается к connected-сетям из раздела 2. Конфигурацию HSRP и IP на саб-интерфейсах R12/R13 (работа 1) откат не трогает: там я добавлял только строки `ip ospf`.
+На всех шести роутерах убрать v6-процесс:
+
+```text
+no ipv6 router ospf 6
+```
+
+На R15 также удалить v6 prefix-list:
+
+```text
+no ipv6 prefix-list NO-AREA101
+```
+
+После отката `show ip route` и `show ipv6 route` на всех роутерах возвращаются к connected-сетям из раздела 2. Конфигурацию HSRP и IP на саб-интерфейсах R12/R13 (работа 1) откат не трогает: там я добавлял только строки `ip ospf`.
 
 ## 9. Соответствие требованиям
 
@@ -498,12 +510,292 @@ no ip prefix-list NO-AREA101
 | 2. R12 и R13 в зоне 10 плюс маршрут по умолчанию | `area 10 stub`, default вставляет ABR | Разделы 4.1, 5 |
 | 3. R19 в зоне 101, только маршрут по умолчанию | `area 101 stub no-summary` на R14, `area 101 stub` на R19 | Разделы 4.1, 4.3 |
 | 4. R20 в зоне 102, все маршруты, кроме сетей зоны 101 | `area 102 filter-list prefix NO-AREA101 in` на R15 плюс поведение ABR | Разделы 4.3, 4.5, 5 |
-| 5. Логика повторяется для IPv6 | Не настраивалось, осознанное решение | Разделы 1, 7 |
+| 5. Логика повторяется для IPv6 | OSPFv3: те же зоны 0/10/101/102, stub, no-summary, range 2001:db8:10::/48, фильтр NO-AREA101 | Раздел 10 |
 | 6. План и изменения в документации | Этот README: план, конфиги, выводы проверок | Весь документ |
+
+## 10. IPv6: повторение логики (пункт 5 задания)
+
+Пункт 5 задания: повторить всю логику зон для IPv6. Я поднял OSPFv3 (процесс 6) на тех же шести роутерах, типы зон повторил один в один, адреса взял из 2001:db8::/32 (резерв для документации). Router-ID оставил те же, что в v4: 10.0.0.X, так что neighbor-таблицы читаются по знакомым ID.
+
+### 10.1 Адресация
+
+| Роутер | Интерфейс | Сеть | Зона |
+|---|---|---|---|
+| R12 | Loopback0 | 2001:db8:12::1/128 | 10 |
+| R12 | e0/0.10 | 2001:db8:10:10::2/64 | 10 |
+| R12 | e0/0.99 | 2001:db8:10:99::2/64 | 10 |
+| R12 | e0/1.20 | 2001:db8:10:20::2/64 | 10 |
+| R12 | e0/2 | 2001:db8:0:1::1/64 (к R14) | 10 |
+| R12 | e0/3 | 2001:db8:0:5::1/64 (к R15) | 10 |
+| R13 | Loopback0 | 2001:db8:13::1/128 | 10 |
+| R13 | e0/0.10 | 2001:db8:10:10::3/64 | 10 |
+| R13 | e0/0.99 | 2001:db8:10:99::3/64 | 10 |
+| R13 | e0/1.20 | 2001:db8:10:20::3/64 | 10 |
+| R13 | e0/3 | 2001:db8:0:2::1/64 (к R14) | 10 |
+| R13 | e0/2 | 2001:db8:0:4::1/64 (к R15) | 10 |
+| R14 | Loopback0 | 2001:db8:14::1/128 | 0 |
+| R14 | e0/0 | 2001:db8:0:1::2/64 (к R12) | 10 |
+| R14 | e0/1 | 2001:db8:0:2::2/64 (к R13) | 10 |
+| R14 | e0/3 | 2001:db8:0:3::1/64 (к R19) | 101 |
+| R15 | Loopback0 | 2001:db8:15::1/128 | 0 |
+| R15 | e0/0 | 2001:db8:0:4::2/64 (к R13) | 10 |
+| R15 | e0/1 | 2001:db8:0:5::2/64 (к R12) | 10 |
+| R15 | e0/3 | 2001:db8:0:6::1/64 (к R20) | 102 |
+| R19 | Loopback0 | 2001:db8:19::1/128 | 101 |
+| R19 | e0/0 | 2001:db8:0:3::2/64 (к R14) | 101 |
+| R20 | Loopback0 | 2001:db8:20::1/128 | 102 |
+| R20 | e0/0 | 2001:db8:0:6::2/64 (к R15) | 102 |
+
+Линки e0/2 у ABR (к R22 и R21) в OSPFv3 не включены, как и в v4.
+
+### 10.2 Конфигурация
+
+R12:
+
+```text
+ipv6 router ospf 6
+ router-id 10.0.0.12
+ area 10 stub
+ no passive-interface default
+ passive-interface Ethernet0/0.10
+ passive-interface Ethernet0/0.99
+ passive-interface Ethernet0/1.20
+!
+interface Loopback0
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/0.10
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/0.99
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/1.20
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/2
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/3
+ ipv6 ospf 6 area 10
+```
+
+R13 то же самое, с перестановкой портов: e0/3 к R14, e0/2 к R15.
+
+R14 (ABR):
+
+```text
+ipv6 router ospf 6
+ router-id 10.0.0.14
+ area 10 stub
+ area 101 stub no-summary
+ area 10 range 2001:DB8:10::/48
+!
+interface Loopback0
+ ipv6 ospf 6 area 0
+!
+interface Ethernet0/0
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/1
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/3
+ ipv6 ospf 6 area 101
+```
+
+R15 (ABR):
+
+```text
+ipv6 router ospf 6
+ router-id 10.0.0.15
+ area 10 stub
+ area 10 range 2001:DB8:10::/48
+ area 102 filter-list prefix NO-AREA101 in
+!
+ipv6 prefix-list NO-AREA101 seq 5 deny 2001:DB8:19::1/128
+ipv6 prefix-list NO-AREA101 seq 10 deny 2001:DB8:0:3::/64
+ipv6 prefix-list NO-AREA101 seq 15 permit ::/0 le 128
+!
+interface Loopback0
+ ipv6 ospf 6 area 0
+!
+interface Ethernet0/0
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/1
+ ipv6 ospf 6 area 10
+!
+interface Ethernet0/3
+ ipv6 ospf 6 area 102
+```
+
+R19 (зона 101):
+
+```text
+ipv6 router ospf 6
+ router-id 10.0.0.19
+ area 101 stub
+!
+interface Loopback0
+ ipv6 ospf 6 area 101
+!
+interface Ethernet0/0
+ ipv6 ospf 6 area 101
+```
+
+R20 (зона 102):
+
+```text
+ipv6 router ospf 6
+ router-id 10.0.0.20
+!
+interface Loopback0
+ ipv6 ospf 6 area 102
+!
+interface Ethernet0/0
+ ipv6 ospf 6 area 102
+```
+
+### 10.3 Два бага по дороге
+
+**passive-interface default на этом IOL.** В v4 связка `passive-interface default` + `no passive-interface` на двух P2P-линках сработала. В v3 то же самое не сработало: e0/2 остался пассивным, в выводе `show ipv6 ospf interface` у него "No Hellos (Passive interface)", adjacency не поднимались. Фикс: убрать default и перечислить пассивные интерфейсы явно:
+
+```text
+no passive-interface default
+passive-interface Ethernet0/0.10
+passive-interface Ethernet0/0.99
+passive-interface Ethernet0/1.20
+```
+
+После этого все adjacency поднялись. Разница в поведении v4-процесса и v6-процесса на одном образе: зафиксировал, конфиг в разделе 10.2 показан с явным списком.
+
+**Prefix-list для /128.** Loopback R19 в v6: 2001:db8:19::1/128. В первую очередь в prefix-list я вписал 2001:DB8:19::/128, то есть префикс, а не адрес. Для /128 prefix-list матчит точный адрес, deny-строка не совпала, и префикс просочился через `seq 15 permit ::/0 le 128`. При этом `seq 10 deny 2001:DB8:0:3::/64` совпадал и отфильтровался: сбой получился «выборочным», линк R14/R19 в зоне 102 не появился, а loopback R19 утек в таблицу R20 как `OI 2001:DB8:19::1/128 [110/40]`.
+
+Сверку я делал по LSA, а не только по таблице R20:
+
+```text
+R15#show ipv6 ospf database | include 19::
+10.0.0.15  68  0x80000001  2001:DB8:19::1/128
+```
+
+LSA генерит R15 (adv router 10.0.0.15). Это контраст с выводом раздела 6 по v4: там R15 межзонные маршруты в зону 102 не ре-анонсировал, и я сделал вывод, что фильтр формальный. В v3 R15 LSA реально генерирует, и без фикса префикса утечка есть. Как я это читаю: либо мой v4-вывод был неполным, либо поведение v2 и v3 в этой сцене действительно различается. Разобрать глубже не успел, фиксирую как есть.
+
+Правка prefix-list на IOL далась с кворками: пересоздать seq с другим текстом нельзя (`%Insertion failed - seq # exists with different policy: 5`), а `no ... seq 5` без полного текста отклоняется (`% Incomplete command`). Работает только полный вариант:
+
+```text
+R15(config)#no ipv6 prefix-list NO-AREA101 seq 5 deny 2001:DB8:19::/128
+R15(config)#ipv6 prefix-list NO-AREA101 seq 5 deny 2001:DB8:19::1/128
+R15(config)#clear ipv6 ospf process
+```
+
+`clear ipv6 ospf process` обязателен: filter-list не вычищает LSA, которые уже в LSDB, без сброса процесса утечка продолжалась бы.
+
+После фикса:
+
+```text
+R15#show ipv6 prefix-list NO-AREA101
+ipv6 prefix-list NO-AREA101: 3 entries
+    seq 5 deny 2001:DB8:19::1/128
+    seq 10 deny 2001:DB8:0:3::/64
+    seq 15 permit ::/0 le 128
+
+R20#show ipv6 route | include 19::
+```
+
+Последняя команда отдала пусто: маршрута нет.
+
+### 10.4 Проверки
+
+Neighbor'ы после `clear ipv6 ospf process` (на R15 процесс сбрасывался дважды: после фикса prefix-list):
+
+```text
+R12#show ipv6 ospf neighbor
+OSPFv3 Router with ID (10.0.0.12) (Process ID 6)
+
+Neighbor ID   Pri   State         Dead Time   Interface ID   Interface
+10.0.0.15     1     FULL/DR       00:00:39    4              Ethernet0/3
+10.0.0.14     1     FULL/DR       00:00:35    3              Ethernet0/2
+
+R13#show ipv6 ospf neighbor
+OSPFv3 Router with ID (10.0.0.13) (Process ID 6)
+
+Neighbor ID   Pri   State         Dead Time   Interface ID   Interface
+10.0.0.14     1     FULL/DR       00:00:39    4              Ethernet0/3
+10.0.0.15     1     FULL/DR       00:00:34    3              Ethernet0/2
+```
+
+На R14 все три adjacency FULL (10.0.0.12, 10.0.0.13, 10.0.0.19), на R15 три FULL (10.0.0.12, 10.0.0.13, 10.0.0.20). Zоны у ABR R14:
+
+```text
+R14#show ipv6 ospf | include Number of areas
+    Number of areas in this router is 3. 1 normal 2 stub 0 nssa
+```
+
+Range на обоих ABR:
+
+```text
+R14#show running-config | include range
+ area 10 range 10.11.0.0 255.255.0.0
+ area 10 range 2001:DB8:10::/48
+```
+
+Таблица R19 (5 строк, totally stubby работает: только default и connected):
+
+```text
+R19#show ipv6 route
+O I        ::/0 [110/11] via FE80::A8BB:CCFF:FE00:E030, Ethernet0/0
+C          2001:DB8:0:3::/64 is directly connected, Ethernet0/0
+L          2001:DB8:0:3::2/128 is directly connected, Ethernet0/0
+LC         2001:DB8:19::1/128 is directly connected, Loopback0
+L          FF00::/8 is directly connected, Null0
+```
+
+Таблица R20 (14 строк, после фикса фильтра; было 15):
+
+```text
+R20#show ipv6 route
+O I        ::/0 [110/31] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:0:1::/64 [110/30] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:0:2::/64 [110/30] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:0:4::/64 [110/20] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:0:5::/64 [110/20] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+C          2001:DB8:0:6::/64 is directly connected, Ethernet0/0
+L          2001:DB8:0:6::2/128 is directly connected, Ethernet0/0
+O I        2001:DB8:10::/48 [110/30] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:12::1/128 [110/20] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:13::1/128 [110/20] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:14::1/128 [110/30] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+O I        2001:DB8:15::1/128 [110/10] via FE80::A8BB:CCFF:FE00:F030, Ethernet0/0
+LC         2001:DB8:20::1/128 is directly connected, Loopback0
+L          FF00::/8 is directly connected, Null0
+```
+
+Range работает: в таблице R20 один суммарный 2001:DB8:10::/48 [110/30] вместо трёх /64 VLAN. В отличие от v4, здесь есть и 2001:DB8:14::1/128 (loopback R14): в v4 у R20 маршрута 10.0.0.14/32 не было (раздел 6), в v3 R15 его в зону 102 переносит.
+
+Матрица пингов (по 5 пакетов):
+
+| Источник | Цель | Результат | Комментарий |
+|---|---|---|---|
+| R20 (2001:db8:20::1) | 2001:db8:19::1 | 5/5, 2/5/19 ms | через default ::/0, точного маршрута нет (отфильтрован) |
+| R20 | 2001:db8:15::1 | 5/5, 1/1/1 ms | сосед по 2001:db8:0:6::/64 |
+| R20 | 2001:db8:10:10::2 (e0/0.10 R12) | 5/5, 1/6/25 ms | через суммарный 2001:DB8:10::/48 |
+| R19 (2001:db8:19::1) | 2001:db8:14::1 | 5/5, 1/4/20 ms | сосед по 2001:db8:0:3::/64 |
+| R19 | 2001:db8:10:10::2 | 5/5, 1/1/1 ms | через default [110/11] |
+| R19 | 2001:db8:20::1 | 5/5, 1/1/3 ms | через default, обратный путь у R20 по default |
+
+### 10.5 Почему «межзонные» пинги прошли без межзонных маршрутов
+
+Оба пинга между R19 и R20 прошли, хотя точных маршрутов друг до друга в таблицах нет: у R20 нет 2001:db8:19::1/128 (фильтр сработал, `| include 19::` пусто), пакет дошёл через default `OI ::/0 [110/31]` через R15. R15 знает 2001:db8:19::1 (получает через зону 10 от R14), поэтому отвечает. У R19 стоит default от totally stubby [110/11], поэтому и его пакет до R20 уходит в default, а ответ возвращается по default у R20.
+
+Ключевой контраст с v4: пара R19 -> 10.0.0.20 была 0/5 (раздел 5), потому что у R20 не было v4-маршрута по умолчанию: зона 102 обычная, а ABR в v2 default в non-backbone зоны автоматически не вставляет. В v3 у R20 default есть, и вот почему: ABR, у которого в RIB есть default, анонсирует ::/0 в non-backbone зоны, к которым он примыкает (RFC 5340, раздел 5.2.3). R15 в v6 знает default (его вставил в stub-зону 10 ABR, R14 его переносит, у R15 в v4 RIB тоже был O*IA 0.0.0.0/0, раздел 4.3), поэтому R15 сам вставил ::/0 в зону 102. Отсюда default у R20 в v6 и работающая пара R19 -> R20, которой в v4 не было.
+
+Конфигурация сохранена: `copy running-config startup-config` на всех шести роутерах, все [OK].
 
 ## Источники
 
 - IETF, [RFC 2328](https://www.rfc-editor.org/rfc/rfc2328): OSPFv2, раздел 3.6 (virtual link), требования к структуре зон.
+- IETF, [RFC 5340](https://www.rfc-editor.org/rfc/rfc5340): OSPFv3, раздел 5.2.3 (межзонные маршруты, default от ABR в non-backbone зоны).
 - Cisco, [OSPF ABR Type 3 LSA Filtering](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_ospf/configuration/15-e/iro-15-e-book/iro-abr-type-3.html): `area N filter-list prefix ... in/out`, prefix-list для межзонных LSA.
 - Cisco, [OSPF Command Reference, area filter-list](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_ospf/command/iro-cr-book/m_ospf-a1.html): синтаксис и направления in/out.
 - NetworkLessons, [Introduction to OSPF Stub Areas](https://networklessons.com/ospf/introduction-to-ospf-stub-areas): stub, totally stubby, NSSA, totally NSSA.
