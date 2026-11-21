@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="540" viewBox="0 0 860 540" font-family="Arial, Helvetica, sans-serif">
+  <rect width="860" height="540" fill="#ffffff"/>
+  <text x="430" y="34" text-anchor="middle" font-size="19" fill="#222">ISP Триада: IS-IS R23-R26 (кольцо)</text>
+
+  <!-- links of the ring -->
+  <g stroke="#2b6cb0" stroke-width="3">
+    <line x1="270" y1="150" x2="590" y2="150"/>
+    <line x1="630" y1="190" x2="630" y2="350"/>
+    <line x1="590" y1="390" x2="270" y2="390"/>
+    <line x1="230" y1="350" x2="230" y2="190"/>
+  </g>
+
+  <!-- external stubs -->
+  <g stroke="#9aa5b1" stroke-width="2" stroke-dasharray="6 4">
+    <line x1="190" y1="130" x2="90" y2="80"/>
+    <line x1="190" y1="410" x2="90" y2="460"/>
+    <line x1="270" y1="430" x2="240" y2="500"/>
+    <line x1="670" y1="130" x2="770" y2="80"/>
+    <line x1="670" y1="160" x2="790" y2="140"/>
+    <line x1="670" y1="380" x2="770" y2="430"/>
+    <line x1="630" y1="430" x2="630" y2="500"/>
+  </g>
+
+  <!-- routers -->
+  <g font-size="16">
+    <g>
+      <rect x="190" y="110" width="80" height="80" rx="40" fill="#ebf4ff" stroke="#2b6cb0" stroke-width="2"/>
+      <text x="230" y="156" text-anchor="middle" font-weight="bold">R23</text>
+      <text x="230" y="215" text-anchor="middle" font-size="13" fill="#555">area 2222</text>
+    </g>
+    <g>
+      <rect x="590" y="110" width="80" height="80" rx="40" fill="#ebf4ff" stroke="#2b6cb0" stroke-width="2"/>
+      <text x="630" y="156" text-anchor="middle" font-weight="bold">R25</text>
+      <text x="630" y="104" text-anchor="middle" font-size="13" fill="#555">area 2222</text>
+    </g>
+    <g>
+      <rect x="590" y="350" width="80" height="80" rx="40" fill="#ebf4ff" stroke="#2b6cb0" stroke-width="2"/>
+      <text x="630" y="396" text-anchor="middle" font-weight="bold">R26</text>
+      <text x="630" y="455" text-anchor="middle" font-size="13" fill="#555">area 26</text>
+    </g>
+    <g>
+      <rect x="190" y="350" width="80" height="80" rx="40" fill="#ebf4ff" stroke="#2b6cb0" stroke-width="2"/>
+      <text x="230" y="396" text-anchor="middle" font-weight="bold">R24</text>
+      <text x="230" y="455" text-anchor="middle" font-size="13" fill="#555">area 24</text>
+    </g>
+  </g>
+
+  <!-- link addresses -->
+  <g font-size="12.5" fill="#2d3748">
+    <text x="430" y="138" text-anchor="middle">10.0.2.0/30</text>
+    <text x="430" y="172" text-anchor="middle">2001:db8:2::/64</text>
+
+    <text x="636" y="262" text-anchor="start">10.0.2.8/30</text>
+    <text x="636" y="278" text-anchor="start">2001:db8:2:2::/64</text>
+
+    <text x="430" y="378" text-anchor="middle">10.0.2.12/30</text>
+    <text x="430" y="412" text-anchor="middle">2001:db8:2:3::/64</text>
+
+    <text x="224" y="262" text-anchor="end">10.0.2.4/30</text>
+    <text x="224" y="278" text-anchor="end">2001:db8:2:1::/64</text>
+  </g>
+
+  <!-- external stub labels -->
+  <g font-size="12.5" fill="#718096">
+    <text x="82" y="72" text-anchor="start">к R22 (e0/0)</text>
+    <text x="82" y="478" text-anchor="start">к R21 (e0/0)</text>
+    <text x="212" y="518" text-anchor="start">к R18 (e0/3)</text>
+    <text x="778" y="72" text-anchor="end">к R27 (e0/1)</text>
+    <text x="796" y="134" text-anchor="end">к R28 (e0/3)</text>
+    <text x="778" y="448" text-anchor="end">к R18 (e0/3)</text>
+    <text x="636" y="518" text-anchor="start">к R28 (e0/1)</text>
+  </g>
+
+  <text x="430" y="530" text-anchor="middle" font-size="12" fill="#718096">Пунктир: линки в другие AS, в IS-IS не участвуют</text>
+</svg>
