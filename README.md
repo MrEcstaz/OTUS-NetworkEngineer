@@ -12,3 +12,4 @@
 | 4 | IS-IS в ISP Триада | [4. IS-IS](4.%20IS-IS/) |
 | 5 | EIGRP: named-mode в офисе Санкт-Петербург | [5. EIGRP](5.%20EIGRP/) |
 | 6 | BGP: eBGP между офисами и провайдерами | [6. BGP](6.%20BGP/) |
+| 7 | iBGP: Москва full-mesh, RR в Триаде, приоритет Ламаса, ECMP в СПб | [7. iBGP](7.%20iBGP/) |
